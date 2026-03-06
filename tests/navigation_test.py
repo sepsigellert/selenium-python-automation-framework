@@ -1,10 +1,14 @@
 from pages.navigation_page import NavigationPage
 
+
 def test_navigation(driver):
-    driver.get("https://www.python.org/")  # Replace with your site URL
     nav = NavigationPage(driver)
 
-    nav.go_to_events()
-    heading = nav.get_heading()
+    nav.open_homepage()
+    assert "apple.com" in nav.get_current_url()
 
-    assert "Events" in heading
+    nav.click_iphone()
+    assert "/iphone" in nav.get_current_url()
+
+    nav.go_home()
+    assert nav.get_current_url().rstrip("/") == "https://www.apple.com"
