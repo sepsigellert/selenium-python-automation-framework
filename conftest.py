@@ -1,33 +1,51 @@
+import os
+
 import pytest
 from selenium import webdriver
-import os
+from selenium.webdriver.chrome.service import Service
+
+try:
+    from webdriver_manager.chrome import ChromeDriverManager
+except ImportError:
+    ChromeDriverManager = None
+
 
 @pytest.fixture
 def driver(request):
     options = webdriver.ChromeOptions()
     options.add_argument("--start-maximized")
-    driver = webdriver.Chrome(options=options)
-    driver.implicitly_wait(5)
+    options.add_argument("--window-size=1920,1080")
 
-    yield driver
+    # CI-only flags (GitHub Actions)
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+
+    # Use webdriver_manager if available, otherwise Selenium Manager fallback
+    if ChromeDriverManager is not None:
+        service = Service(ChromeDriverManager().install())
+        browser = webdriver.Chrome(service=service, options=options)
+    else:
+        browser = webdriver.Chrome(options=options)
+
+    browser.implicitly_wait(5)
+    yield browser
 
     # Take screenshot on failure
-    # if request.node.rep_call.failed:  # CHANGED: old direct access could fail if rep_call is missing/invalid
-    rep = getattr(request.node, "rep_call", None)  # CHANGED: safely read rep_call from the test node
-    if rep and rep.failed:  # CHANGED: guard check avoids AttributeError and then verifies test failure
-        os.makedirs("screenshots", exist_ok=True)  # CHANGED: keep creating screenshots folder when needed
-        driver.save_screenshot(f"screenshots/{request.node.name}.png")  # CHANGED: keep screenshot naming behavior
+    rep = getattr(request.node, "rep_call", None)
+    if rep and rep.failed:
+        screenshots_dir = os.path.join(os.path.dirname(__file__), "screenshots")
+        os.makedirs(screenshots_dir, exist_ok=True)
+        browser.save_screenshot(os.path.join(screenshots_dir, f"{request.node.name}.png"))
 
-    driver.quit()
+    browser.quit()
 
 
-# Hook to capture test outcome
-# def pytest_runtest_makereport(item, call):  # CHANGED: old hook saved CallInfo, not TestReport
-#     if "driver" in item.fixturenames:  # CHANGED: old conditional left for reference
-#         setattr(item, "rep_" + call.when, call)  # CHANGED: old assignment caused `.failed` AttributeError
-@pytest.hookimpl(hookwrapper=True)  # CHANGED: enable wrapper so we can access the generated TestReport
-def pytest_runtest_makereport(item, call):  # CHANGED: keep same hook name with corrected implementation
-    outcome = yield  # CHANGED: run the actual pytest hook chain first
-    report = outcome.get_result()  # CHANGED: extract TestReport object (has `.failed`)
-    if "driver" in item.fixturenames:  # CHANGED: keep behavior scoped to tests using the driver fixture
-        setattr(item, "rep_" + report.when, report)  # CHANGED: store TestReport instead of CallInfo
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    _ = call.when
+    outcome = yield
+    report = outcome.get_result()
+    if "driver" in item.fixturenames:
+        setattr(item, "rep_" + report.when, report)
