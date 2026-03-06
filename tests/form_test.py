@@ -1,7 +1,7 @@
 from pages.form_page import FormPage
 
 def test_form_submit(driver):
-    driver.get("https://example.com/form")  # Replace with your form URL
+    driver.get("https://www.python.org/form")  # Replace with your form URL
     form = FormPage(driver)
 
     form.fill_input("Hello Selenium")
